@@ -54,6 +54,8 @@ class CelebaDataset(Dataset):
         if self.landmark_transform:
             image, landmarks = self.landmark_transform((image, landmarks))
 
+        landmarks = torch.as_tensor(landmarks, dtype=torch.float32)
+
         sample = {'image': image, 'landmarks': landmarks, 'attributes': attributes}
 
         return sample
