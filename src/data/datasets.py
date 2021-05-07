@@ -20,8 +20,8 @@ class CelebaDataset(Dataset):
             transform: Optional transform to be applied on image only
             landmark_transform: Custom transforms to be applied on image and landmark
         '''
-        self.landmarks_frame = pd.read_csv(landmark_file, delim_whitespace=True)
-        self.attributes_frame = pd.read_csv(attribute_file, delim_whitespace=True)
+        self.landmarks_frame = pd.read_csv(landmark_file)
+        self.attributes_frame = pd.read_csv(attribute_file)
         self.image_dir = image_dir
         self.transform = transform
         self.landmark_transform = landmark_transform
@@ -47,7 +47,9 @@ class CelebaDataset(Dataset):
         #landmarks[:, 0] /= width
         #landmarks[:, 1] /= height
         
-        attributes = self.attributes_frame.iloc[idx]
+        attributes = self.attributes_frame.iloc[idx, 1:]
+        attributes = np.array([attributes]).astype('int')
+        attributes = torch.as_tensor(attributes, dtype=torch.int)
 
         if self.transform:
             image = self.transform(image)
