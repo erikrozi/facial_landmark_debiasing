@@ -116,7 +116,7 @@ class Trainer:
               figure_dir = "experiments/figures",
               exp_name = 'experiment',
               epoch_per_save = 1,
-              batch_per_save = 100,
+              batch_per_save = 1000000,
               epoch_per_print = 1,
               batch_per_print = 100,
               verbose = True):
@@ -135,6 +135,8 @@ class Trainer:
             exp_name: identifier of experiment for saving purposes
             epoch_per_save: Number of epochs between consecutive model checkpoints
             batch_per_save: Number of batches between consecutive model checkpoints 
+                WARNING: Making this low will lead to massive memory usage. Default is
+                set to high number.
             epoch_per_print: Number of epochs between consecutive train/val prints
             batch_per_print: Number of batches between consecutive train prints
             verbose: Whether to print log to stdout
