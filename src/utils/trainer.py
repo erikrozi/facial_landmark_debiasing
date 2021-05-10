@@ -60,7 +60,6 @@ class Trainer:
             scheduler_step_val: whether to pass in val loss to scheduler step function,
             device: Device str to run trainer on
             debug: Print statements during initialization
-            isPSE: Only set to true if 'image' input needs a tuple of size 2 (ie. pixel-set)
         """
         
         self.debug = debug
