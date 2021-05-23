@@ -21,17 +21,20 @@ from trainer import Trainer
 
 wflw_data_loc = '/home/data/wflw/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'wflw_baseline_resnet_nopretrain_1'
+EXPERIMENT_NAME = 'wflw_baseline_resnet_nopretrain_transforms_1'
 
 train_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt', wflw_data_loc + 'WFLW_images',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
+                            transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                         ]), 
                         landmark_transform=transforms.Compose([
                             landmark_transforms.Rescale(224),
+                            landmark_transforms.RandomRotation(20),
                             landmark_transforms.NormalizeLandmarks()
                         ]), crop=True)
+
 val_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt', wflw_data_loc + 'WFLW_images',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
@@ -41,6 +44,7 @@ val_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_
                             landmark_transforms.Rescale(224),
                             landmark_transforms.NormalizeLandmarks()
                         ]), crop=True)
+
 test_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt', wflw_data_loc + 'WFLW_images',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
@@ -50,6 +54,7 @@ test_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr
                             landmark_transforms.Rescale(224),
                             landmark_transforms.NormalizeLandmarks()
                         ]), crop=True)
+
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
@@ -73,7 +78,7 @@ trainer_params = {
     'criterion_args': {},
     'optimizer': torch.optim.Adam,
     'optimizer_args': {
-         "lr": 1e-3,
+         "lr": 1e-4,
          "weight_decay": 0
     },
     'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau,
