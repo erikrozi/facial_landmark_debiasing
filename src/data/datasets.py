@@ -151,7 +151,7 @@ class AnimalDataset(Dataset):
         img_name = os.path.join(self.image_dir, 
                                 self.annotations_frame.iloc[idx, 0])
 
-        image = Image.open(img_name)
+        image = Image.open(img_name).convert('RGB')
         width, height = image.size
         
         landmarks = self.annotations_frame.iloc[idx, 1:]
