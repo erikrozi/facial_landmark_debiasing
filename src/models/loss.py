@@ -33,10 +33,10 @@ def wing_loss(output, target, w=10, eps=2):
     '''
     Calculate average wing loss over all samples
 
-    output = output labels predicted by model
-    target = true labels
-    w = sets the range of the non-linear part to be (-w, w) (hyperparameter)
-    eps = controls curvature of the non-linear region (hyperparameter)
+    output: output labels predicted by model
+    target: true labels
+    w: sets the range of the non-linear part to be (-w, w) (hyperparameter)
+    eps: controls curvature of the non-linear region (hyperparameter)
 
     Default w, eps chosen to be the one presented in Feng et al., 2018 (https://arxiv.org/pdf/1711.06753.pdf)
     '''
