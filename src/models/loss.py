@@ -5,6 +5,18 @@ Use the total_loss() function:
 N = number of samples
 L = number of landmarks
 K = number of sensitive attributes
+
+PARAMETERS
+- output: (N, 2L) tensor of landmark locations predicted by model (continuous)
+- target: (N, 2L) tensor of true landmark locations (continuous)
+- output_attr: (N, K, 2) tensor of predicted scores of sensitive attributes, given feature representations
+- target_attr: (N, K) tensor of true sensitive attribute labels. all entries are 0, 1
+
+HYPERPARAMETERS
+- w: wing loss hyperparameter. sets the range of the non-linear part to be (-w, w). default 10
+- eps: wing loss hyperparameter. controls curvature of the non-linear region. default 2
+- alpha: controls influence of confusion loss. default 1
+- Default w, eps chosen to be the one presented in Feng et al., 2018 (https://arxiv.org/pdf/1711.06753.pdf)
 """
 
 
@@ -16,17 +28,6 @@ import math
 def total_loss(output, target, output_attr, target_attr, w=10, eps=2, alpha=1):
     """
     Calculates the join-loss for adversarial domain adaptation
-
-    PARAMETERS
-    output: (N, 2L) tensor of landmark locations predicted by model (continuous)
-    target: (N, 2L) tensor of true landmark locations (continuous)
-    output_attr: (N, K, 2) tensor of predicted scores of sensitive attributes, given feature representations
-    target_attr: (N, K) tensor of true sensitive attribute labels. all entries are 0, 1
-
-    HYPERPARAMETERS
-    w: wing loss hyperparameter. sets the range of the non-linear part to be (-w, w). default 10
-    eps: wing loss hyperparameter. controls curvature of the non-linear region. default 2
-    alpha: controls influence of confusion loss. default 1
     """
     primary_loss = wing_loss(output, target, w, eps)
     adversary_loss = adversarial_loss(output_attr, target_attr)
@@ -40,16 +41,7 @@ def wing_loss(output, target, w=10, eps=2):
     """
     Calculates average wing loss of all sample output/target differences
     Calculates average wing loss of each landmark location
-
-    PARAMETERS
-    output: (N, 2L) tensor of landmark locations predicted by model (continuous)
-    target: (N, 2L) tensor of true landmark locations (continuous)
-    w: sets the range of the non-linear part to be (-w, w) (hyperparameter)
-    eps: controls curvature of the non-linear region (hyperparameter)
-
-    Default w, eps chosen to be the one presented in Feng et al., 2018 (https://arxiv.org/pdf/1711.06753.pdf)
     """
-
     abs_diff = torch.abs(output - target)
     C = w - w * math.log(1 + w / eps)
 
@@ -61,16 +53,22 @@ def wing_loss(output, target, w=10, eps=2):
     return loss
 
 
+def generator_loss(output, target, output_attr, w=10, eps=2, alpha=1):
+    """
+    Calculates the generator loss
+    """
+    primary_loss = wing_loss(output, target, w, eps)
+    confusion_loss = domain_confusion_loss(output_attr)
+
+    loss = primary_loss + alpha * confusion_loss
+    return loss
+
+
 def adversarial_loss(output_attr, target_attr):
     """
     Calculates the adversarial loss of each sensitive attribute and returns the sum
-
-    PARAMETERS
-    output_attr: (N, K, 2) tensor of predicted scores of sensitive attributes, given feature representations
-    target_attr: (N, K) tensor of true sensitive attribute labels. all entries are 0, 1
     """
-
-    # compute softmax of each sensitive attribute for each sample
+    # compute log-softmax of each sensitive attribute for each sample
     log_softmax = nn.LogSoftmax(dim=-1)
     log_probs = log_softmax(output_attr)
 
@@ -82,13 +80,8 @@ def adversarial_loss(output_attr, target_attr):
 def domain_confusion_loss(output_attr):
     """
     Calculates the domain confusion loss of each sensitive attribute and returns the sum
-
-    PARAMETERS
-    output_attr: (N, K, 2) tensor of predicted scores of sensitive attributes, given feature representations
-    target_attr: (N, K) tensor of true sensitive attribute labels. all entries are 0, 1
     """
-
-    # compute softmax of each sensitive attribute for each sample
+    # compute log-softmax of each sensitive attribute for each sample
     log_softmax = nn.LogSoftmax(dim=-1)
     log_probs = log_softmax(output_attr)
 
