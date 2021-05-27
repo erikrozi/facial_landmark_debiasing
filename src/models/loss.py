@@ -45,7 +45,7 @@ def wing_loss(output, target, w=10, eps=2):
     abs_diff = torch.abs(output - target)
     C = w - w * math.log(1 + w / eps)
 
-    loss_per_sample_feature = torch.where(abs_diff < w, w * torch.ln(1 + abs_diff / eps), abs_diff - C)
+    loss_per_sample_feature = torch.where(abs_diff < w, w * torch.log(1 + abs_diff / eps), abs_diff - C)
     loss_per_sample = loss_per_sample_feature.sum(dim=-1)
     # loss_per_feature = loss_per_sample_feature.mean(dim=0)
     loss = loss_per_sample.mean()
