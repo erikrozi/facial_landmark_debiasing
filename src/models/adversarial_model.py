@@ -22,12 +22,18 @@ from trainer import Trainer
 
 from torch.utils.data import sampler
 
-NOISE_DIM = 96
 
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
 
-def discriminator(seed=None):
+def generator(seed=None):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    model = None
+    return model
+
+def adversary(seed=None):
     if seed is not None:
         torch.manual_seed(seed)
 
@@ -43,7 +49,7 @@ def get_optimizer(model, lr=1e-3, beta1=0.5, beta2=0.999):
     return optimizer
 
 
-def discriminator_classifier(batch_size, num_attr):
+def adversary_classifier(batch_size, num_attr):
     """
     Predicts all sensitive attribute scores given feature representations
     """
@@ -67,11 +73,9 @@ def discriminator_classifier(batch_size, num_attr):
 def generator_model():
     return
 
-def run_a_gan(generator, adversary, feature_extractor, g_solver, a_solver, p_solver, generator_loss, adversarial_loss,
+def run_model(generator, adversary, feature_extractor, g_solver, a_solver, generator_loss, adversarial_loss,
               loader_train, w=10, eps=2, alpha=1, print_every=250, batch_size=128, num_epochs=10, verbose=True):
     """
-    Train a GAN!
-
     Inputs:
     - generator, adversary: PyTorch models for the generator, adversary, predictor
     - feature_extractor: extracts feature representation created by generator
@@ -83,6 +87,7 @@ def run_a_gan(generator, adversary, feature_extractor, g_solver, a_solver, p_sol
     - noise_size: Dimension of the noise to use as input to the generator.
     - num_epochs: Number of epochs over the training dataset to use for training.
     """
+    
     images = []
     iter_count = 0
     for epoch in range(num_epochs):
@@ -96,7 +101,7 @@ def run_a_gan(generator, adversary, feature_extractor, g_solver, a_solver, p_sol
 
             # generator: create feature representations and predicts landmark locations using feature representations
             output = generator(data)
-            feat_repr = generator.feature_representations()
+            feat_repr = feature_extractor(generator)
 
             # adversary: predict sensitive attributes using feature representations
             output_attr = adversary(feat_repr)
