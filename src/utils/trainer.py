@@ -43,7 +43,8 @@ class Trainer:
                  scheduler = None,
                  scheduler_args = {},
                  scheduler_step_val = False,
-                 debug = False):
+                 debug = False,
+                 is_preset_criterion = True):
         """
         Arguments:
             model: model to train
@@ -80,7 +81,10 @@ class Trainer:
         self.val_loader = val_loader
         self.test_loader = test_loader
         
-        self.criterion = criterion(**criterion_args)
+        if is_preset_criterion:
+            self.criterion = criterion(**criterion_args)
+        else:
+            self.criterion = criterion
         self.optimizer = optimizer(model.parameters(), **optimizer_args)
         self.scheduler = scheduler(self.optimizer, **scheduler_args) if scheduler is not None else None
         self.scheduler_step_val = scheduler_step_val

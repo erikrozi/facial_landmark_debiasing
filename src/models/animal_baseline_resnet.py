@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils, models
 from torch import nn
+from loss import wing_loss
 
 import sys
 sys.path.append('../data')
@@ -21,7 +22,7 @@ from trainer import Trainer
 
 data_loc = '/home/data/animal/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'animal_baseline_resnet_nopretrain_transforms_1'
+EXPERIMENT_NAME = 'animal_baseline_resnet_wingloss_1'
 
 train_dataset = AnimalDataset(data_loc + 'animal_train.csv', data_loc + 'animal_dataset_v1_clean_check',
                         transform=transforms.Compose([
@@ -74,7 +75,7 @@ trainer_params = {
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
     'test_loader': test_dataloader,
-    'criterion': torch.nn.MSELoss,
+    'criterion': wing_loss,
     'criterion_args': {},
     'optimizer': torch.optim.Adam,
     'optimizer_args': {
@@ -90,6 +91,7 @@ trainer_params = {
     },
     'scheduler_step_val': True,
     'debug': False,
+    'is_preset_criterion': False,
 }
 
 trainer = Trainer(**trainer_params)

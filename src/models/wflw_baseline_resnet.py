@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils, models
 from torch import nn
+from loss import wing_loss
 
 import sys
 sys.path.append('../data')
@@ -21,7 +22,7 @@ from trainer import Trainer
 
 wflw_data_loc = '/home/data/wflw/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'wflw_baseline_resnet_nopretrain_transforms_1'
+EXPERIMENT_NAME = 'wflw_baseline_resnet_wingloss__notransform_1'
 
 train_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt', wflw_data_loc + 'WFLW_images',
                         transform=transforms.Compose([
@@ -74,7 +75,7 @@ trainer_params = {
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
     'test_loader': test_dataloader,
-    'criterion': torch.nn.MSELoss,
+    'criterion': wing_loss,
     'criterion_args': {},
     'optimizer': torch.optim.Adam,
     'optimizer_args': {
@@ -90,6 +91,7 @@ trainer_params = {
     },
     'scheduler_step_val': True,
     'debug': False,
+    'is_preset_criterion': False,
 }
 
 trainer = Trainer(**trainer_params)

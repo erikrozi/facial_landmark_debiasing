@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils, models
 from torch import nn
+from loss import wing_loss
 
 import sys
 sys.path.append('../data')
@@ -21,8 +22,20 @@ from trainer import Trainer
 
 data_loc = '/home/data/celeba/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+EXPERIMENT_NAME = 'celeba_baseline_resnet_wingloss_1'
 
-train_dataset = CelebaDataset(data_loc + 'landmarks_train.csv', data_loc + 'attr_train.csv', data_loc + 'images',
+train_dataset = CelebaDataset(data_loc + 'landmarks_train.csv', data_loc + 'attr_train.csv', data_loc + 'images/img_celeba',
+                        transform=transforms.Compose([
+                            transforms.ToTensor(), 
+                            transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
+                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                        ]), 
+                        landmark_transform=transforms.Compose([
+                            landmark_transforms.Rescale(224),
+                            landmark_transforms.RandomRotation(20),
+                            landmark_transforms.NormalizeLandmarks()
+                        ]))
+val_dataset = CelebaDataset(data_loc + 'landmarks_val.csv', data_loc + 'attr_val.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -31,16 +44,7 @@ train_dataset = CelebaDataset(data_loc + 'landmarks_train.csv', data_loc + 'attr
                             landmark_transforms.Rescale(224),
                             landmark_transforms.NormalizeLandmarks()
                         ]))
-val_dataset = CelebaDataset(data_loc + 'landmarks_val.csv', data_loc + 'attr_val.csv', data_loc + 'images',
-                        transform=transforms.Compose([
-                            transforms.ToTensor(), 
-                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                        ]), 
-                        landmark_transform=transforms.Compose([
-                            landmark_transforms.Rescale(224),
-                            landmark_transforms.NormalizeLandmarks()
-                        ]))
-test_dataset = CelebaDataset(data_loc + 'landmarks_test.csv', data_loc + 'attr_test.csv', data_loc + 'images',
+test_dataset = CelebaDataset(data_loc + 'landmarks_test.csv', data_loc + 'attr_test.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -68,7 +72,7 @@ trainer_params = {
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
     'test_loader': test_dataloader,
-    'criterion': torch.nn.MSELoss,
+    'criterion': wing_loss,
     'criterion_args': {},
     'optimizer': torch.optim.Adam,
     'optimizer_args': {
@@ -84,12 +88,13 @@ trainer_params = {
     },
     'scheduler_step_val': True,
     'debug': False,
+    'is_preset_criterion': False,
 }
 
 trainer = Trainer(**trainer_params)
 
 train_params = {
-    'num_epochs': 10,
+    'num_epochs': 25,
     'start_epochs': 0,
     'forward_args': {},
     'validate': True,
@@ -97,7 +102,7 @@ train_params = {
     'save_dir': "../experiments/checkpoints",
     'tensorboard_dir': "../experiments/tensorboard",
     'log_dir': "../experiments/logs",
-    'exp_name': 'celeba_baseline_resnet_nopretrain_1',
+    'exp_name': EXPERIMENT_NAME,
     'epoch_per_save': 1,
     'epoch_per_print': 1,
     'batch_per_print': 100,
