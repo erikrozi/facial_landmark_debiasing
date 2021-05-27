@@ -11,6 +11,7 @@ K = number of sensitive attributes
 import torch
 import torch.nn as nn
 import math
+from torch import Tensor
 
 
 def total_loss(output, target, output_attr, target_attr, w=10, eps=2, alpha=1):
@@ -53,7 +54,7 @@ def wing_loss(output, target, w=10, eps=2):
     abs_diff = torch.abs(output - target)
     C = w - w * math.log(1 + w / eps)
 
-    loss_per_sample_feature = torch.where(abs_diff < w, w * torch.ln(1 + abs_diff / eps), abs_diff - C)
+    loss_per_sample_feature = torch.where(abs_diff < w, w * torch.log(1 + abs_diff / eps), abs_diff - C)
     loss_per_sample = loss_per_sample_feature.sum(dim=-1)
     # loss_per_feature = loss_per_sample_feature.mean(dim=0)
     loss = loss_per_sample.mean()
@@ -95,3 +96,16 @@ def domain_confusion_loss(output_attr):
     # total loss
     loss = log_probs.mean()
     return loss
+
+
+class WingLoss(nn.Module):
+    """
+    Implements PyTorch Wing Loss training function
+    """
+
+    def __init__(self, w=10, eps=2) -> None:
+        self.w = w
+        self.eps = eps
+
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
+        return wing_loss(input, target)
