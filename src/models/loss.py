@@ -27,7 +27,7 @@ import math
 
 def total_loss(output, target, output_attr, target_attr, w=10, eps=2, alpha=1):
     """
-    Calculates the join-loss for adversarial domain adaptation
+    Calculates the total loss for adversarial domain adaptation
     """
     primary_loss = wing_loss(output, target, w, eps)
     adversary_loss = adversarial_loss(output_attr, target_attr)
