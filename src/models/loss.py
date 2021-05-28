@@ -73,7 +73,7 @@ def adversarial_loss(output_attr, target_attr):
     log_probs = log_softmax(output_attr)
 
     # total loss
-    loss = log_probs[target_attr == 1].sum()
+    loss = - log_probs[target_attr == 1].sum()
     return loss
 
 
@@ -86,5 +86,5 @@ def domain_confusion_loss(output_attr):
     log_probs = log_softmax(output_attr)
 
     # total loss
-    loss = log_probs.mean()
+    loss = - log_probs.mean()
     return loss
