@@ -73,7 +73,7 @@ def adversarial_loss(output_attr, target_attr):
     log_probs = log_softmax(output_attr)
 
     # total loss
-    loss = log_probs[:, :, target_attr].sum()
+    loss = log_probs[target_attr == 1].sum()
     return loss
 
 

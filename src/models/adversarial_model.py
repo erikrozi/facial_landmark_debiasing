@@ -1,6 +1,6 @@
 import os
 import torch
-from torch import nn
+from torch import nn, Tensor
 import pandas as pd
 from PIL import Image
 import numpy as np
@@ -10,6 +10,7 @@ from torchvision import transforms, utils, models
 from torch.utils.tensorboard import SummaryWriter
 from loss import total_loss, generator_loss, adversarial_loss
 import torch.optim as optim
+from typing import Dict, Iterable, Callable
 import numpy as np
 
 import sys
@@ -49,21 +50,17 @@ def get_optimizer(model, lr=1e-3, beta1=0.5, beta2=0.999):
     return optimizer
 
 
-def adversary_classifier(batch_size, num_attr):
+def adversary_classifier(layer_size, num_attr):
     """
     Predicts all sensitive attribute scores given feature representations
     """
     model = nn.Sequential(
-        nn.Conv2d(1, 32, 5, 1),
-        nn.LeakyReLU(0.01),
-        nn.MaxPool2d(2, 2),
-        nn.Conv2d(32, 64, 5, 1),
-        nn.LeakyReLU(0.01),
-        nn.MaxPool2d(2, 2),
-        Flatten(),
-        nn.Linear(4 * 4 * 64, 4 * 4 * 64),
-        nn.LeakyReLU(0.01),
-        nn.Linear(4 * 4 * 64, num_attr)
+      nn.Flatten(),
+      nn.Linear(layer_size, 256),
+      nn.LeakyReLU(0.01),
+      nn.Linear(256, 256),
+      nn.LeakyReLU(0.01),
+      nn.Linear(256, num_attr)
     )
 
     return model
@@ -73,8 +70,37 @@ def adversary_classifier(batch_size, num_attr):
 def generator_model():
     return
 
-def run_model(generator, adversary, feature_extractor, g_solver, a_solver, generator_loss, adversarial_loss,
-              loader_train, w=10, eps=2, alpha=1, print_every=250, batch_size=128, num_epochs=10, verbose=True):
+#resnet_features = FeatureExtractor(resnet50(), layers=["layer4", "avgpool"])
+#features = resnet_features(dummy_input)
+
+class FeatureExtractor(nn.Module):
+    def __init__(self, model: nn.Module, layers: Iterable[str]):
+        super().__init__()
+        self.model = model
+        self.layers = layers
+        self._features = {layer: torch.empty(0) for layer in layers}
+
+        for layer_id in layers:
+            layer = dict([*self.model.named_modules()])[layer_id]
+            layer.register_forward_hook(self.save_outputs_hook(layer_id))
+
+    def save_outputs_hook(self, layer_id: str) -> Callable:
+        def fn(_, __, output):
+            self._features[layer_id] = output
+        return fn
+
+    def forward(self, x: Tensor) -> Dict[str, Tensor]:
+        _ = self.model(x)
+        return self._features
+
+
+def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
+              train_loader, w=10, eps=2, alpha=1, print_every=100, num_epochs=20, verbose=True, num_classes=10, num_attributes=6,
+              save_dir = "experiments/checkpoints",
+              tensorboard_dir = "experiments/tensorboard",
+              log_dir = "experiments/logs",
+              figure_dir = "experiments/figures",
+              exp_name = 'experiment'):
     """
     Inputs:
     - generator, adversary: PyTorch models for the generator, adversary, predictor
@@ -83,33 +109,80 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver, gener
     - generator_loss, adversarial_loss: compute generator and adversary loss
     - verbose:
     - print_every: print loss after 'print_every' iterations
-    - batch_size: Batch size to use for training.
     - noise_size: Dimension of the noise to use as input to the generator.
     - num_epochs: Number of epochs over the training dataset to use for training.
     """
+    def _print_log(msg, log_file=None, verbose=True):
+        if log_file is not None:
+            with open(log_file, 'a') as file:
+                print(msg, file=file)
+        print(msg) if verbose else 0
     
+    for folder in [save_dir, tensorboard_dir, log_dir, figure_dir]:
+        if folder is not None and not os.path.exists(folder):
+            os.makedirs(folder)
+            
+    experiment_name = f"{exp_name}"
+    save_dir = os.path.join(save_dir, experiment_name) if save_dir is not None else None
+    tensorboard_dir = os.path.join(tensorboard_dir, experiment_name) if tensorboard_dir is not None else None
+    figure_dir = os.path.join(figure_dir, experiment_name) if figure_dir is not None else None
+        
+    # Create subfolders if not existent
+    for folder in [save_dir, tensorboard_dir, figure_dir]:
+        if folder is not None and not os.path.exists(folder):
+            os.makedirs(folder)
+                
+    for folder in [save_dir, tensorboard_dir, log_dir, figure_dir]:
+        if folder is not None:
+            assert(os.path.exists(folder))
+        
+    writer = SummaryWriter(tensorboard_dir) if tensorboard_dir is not None else None
+    log_file = os.path.join(log_dir, experiment_name) if log_dir is not None else None
+        
+    _print_log(f"M Experiment {exp_name}", log_file=log_file, verbose=verbose)
+    _print_log(f"M Log path: {log_file}", log_file=log_file, verbose=verbose)
+    _print_log(f"M Figure path: {figure_dir}", log_file=log_file, verbose=verbose)
+    _print_log(f"M Model save directory: {save_dir}", log_file=log_file, verbose=verbose)
+    _print_log(f"M Tensorboard directory: {tensorboard_dir}", log_file=log_file, verbose=verbose)
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+    generator = generator.to(device=device)
+    adversary = adversary.to(device=device)
+    feature_extractor = feature_extractor.to(device=device)
+        
+    #############################
+    #         Train Loop        #
+    #############################
+        
+    _print_log("O ----------==========Training Loop==========----------", log_file=log_file, verbose=verbose)
     images = []
     iter_count = 0
     for epoch in range(num_epochs):
-        for data, target in loader_train:
-            if len(data) != batch_size:
-                continue
+        generator.train()
+        feature_extractor.train()
+        adversary.train()
+        for batch_idx, batch in enumerate(train_loader, 0):
+            inputs = batch['image'].to(device=device)
+            labels = batch['landmarks'].view(-1, num_classes).to(device=device)
+            target_attr = batch['attributes'].view(-1, num_attributes).to(device=device)
 
             # zero gradient
             g_solver.zero_grad()
             a_solver.zero_grad()
 
             # generator: create feature representations and predicts landmark locations using feature representations
-            output = generator(data)
-            feat_repr = feature_extractor(generator)
+            output = generator(inputs)
+                
+            with torch.no_grad():
+                feat_repr = list(feature_extractor(inputs).items())[0][1] #TODO
 
             # adversary: predict sensitive attributes using feature representations
             output_attr = adversary(feat_repr)
-            target_attr = data
-
+            
             # calculator generator loss and update
-            g_loss = generator_loss(output, target, output_attr, w, eps, alpha)
-            g_loss.backward()
+            g_loss = generator_loss(output, labels, output_attr, w, eps, alpha)
+            g_loss.backward(retain_graph=True)
             g_solver.step()
 
             # calculator adversarial loss and update
@@ -188,3 +261,4 @@ def count_params(model):
     param_count = np.sum([np.prod(p.size()) for p in model.parameters()])
     return param_count
 
+        

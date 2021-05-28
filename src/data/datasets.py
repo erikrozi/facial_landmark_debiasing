@@ -49,6 +49,7 @@ class CelebaDataset(Dataset):
         
         attributes = self.attributes_frame.iloc[idx, 1:]
         attributes = np.array([attributes]).astype('int')
+        attributes[attributes == -1] = 0
         attributes = torch.as_tensor(attributes, dtype=torch.int)
 
         if self.transform:
