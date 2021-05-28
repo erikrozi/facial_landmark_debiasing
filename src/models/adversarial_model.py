@@ -66,13 +66,6 @@ def adversary_classifier(layer_size, num_attr):
     return model
 
 
-# TODO: code the generator. add a forward hook to the model to save feat reprs (called feature_representations)
-def generator_model():
-    return
-
-#resnet_features = FeatureExtractor(resnet50(), layers=["layer4", "avgpool"])
-#features = resnet_features(dummy_input)
-
 class FeatureExtractor(nn.Module):
     def __init__(self, model: nn.Module, layers: Iterable[str]):
         super().__init__()
@@ -95,7 +88,7 @@ class FeatureExtractor(nn.Module):
 
 
 def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
-              train_loader, w=10, eps=2, alpha=1, print_every=100, num_epochs=20, verbose=True, num_classes=10, num_attributes=6,
+              train_loader, val_loader, w=10, eps=2, alpha=1, print_every=100, num_epochs=20, verbose=True, num_classes=10, num_attributes=6,
               save_dir = "experiments/checkpoints",
               tensorboard_dir = "experiments/tensorboard",
               log_dir = "experiments/logs",
@@ -106,17 +99,28 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
     - generator, adversary: PyTorch models for the generator, adversary, predictor
     - feature_extractor: extracts feature representation created by generator
     - g_solver, a_solver: torch.optim Optimizers for training the generator/adversary
-    - generator_loss, adversarial_loss: compute generator and adversary loss
-    - verbose:
+    - train_loader, val_loader: DataLoader objects containing image, landmark, and attributes
     - print_every: print loss after 'print_every' iterations
-    - noise_size: Dimension of the noise to use as input to the generator.
-    - num_epochs: Number of epochs over the training dataset to use for training.
     """
+    # log file for saving
     def _print_log(msg, log_file=None, verbose=True):
         if log_file is not None:
             with open(log_file, 'a') as file:
                 print(msg, file=file)
         print(msg) if verbose else 0
+        
+    # Plot loss graph function
+    def loss_graph(figure_file, train, val, show=False):
+        plt.close()
+        fig = plt.figure()
+        
+        plt.title(f"Loss, {len(self.train_loss_hist)} epochs")
+        
+        plt.plot(train, 'b-') if train else 0
+        plt.plot(val, 'g-') if val else 0
+        
+        plt.savefig(figure_file)
+        plt.savefig(sys.stdout.buffer) if show else 0
     
     for folder in [save_dir, tensorboard_dir, log_dir, figure_dir]:
         if folder is not None and not os.path.exists(folder):
@@ -158,10 +162,18 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
     _print_log("O ----------==========Training Loop==========----------", log_file=log_file, verbose=verbose)
     images = []
     iter_count = 0
+    gen_loss_train_hist = []
+    gen_loss_val_hist = []
+    adv_loss_train_hist = []
+    adv_loss_val_hist = []
+    
     for epoch in range(num_epochs):
         generator.train()
         feature_extractor.train()
         adversary.train()
+        
+        gen_losses = []
+        adv_losses = []
         for batch_idx, batch in enumerate(train_loader, 0):
             inputs = batch['image'].to(device=device)
             labels = batch['landmarks'].view(-1, num_classes).to(device=device)
@@ -174,8 +186,9 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             # generator: create feature representations and predicts landmark locations using feature representations
             output = generator(inputs)
                 
+            # Extract base features
             with torch.no_grad():
-                feat_repr = list(feature_extractor(inputs).items())[0][1] #TODO
+                feat_repr = list(feature_extractor(inputs).items())[0][1] 
 
             # adversary: predict sensitive attributes using feature representations
             output_attr = adversary(feat_repr)
@@ -189,11 +202,74 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             a_loss = adversarial_loss(output_attr, target_attr)
             a_loss.backward()
             a_solver.step()
+            
+            gen_losses.append(loss.item())
+            adv_losses.append(loss.item())
 
             if verbose and iter_count % print_every == 0:
-                print('Iter: {}, G Loss: {:.4}, A Loss:{:.4}'.format(iter_count, g_loss.item(), a_loss.item()))
+                _print_log('B Iter: {}, G Loss: {:.4}, A Loss:{:.4}'.format(iter_count, g_loss.item(), a_loss.item()), log_file=log_file, verbose=verbose)
 
             iter_count += 1
+        gen_loss = sum(gen_losses) / len(gen_losses)
+        adv_loss = sum(adv_losses) / len(adv_losses)
+        gen_loss_train_hist.append(gen_loss)
+        writer.add_scalar('loss/train', gen_loss, epoch) if writer is not None else 0
+        adv_loss_train_hist.append(adv_loss)
+        writer.add_scalar('loss/adv_train', adv_loss, epoch) if writer is not None else 0
+        
+        _print_log(f'T Epoch {epoch} loss: {gen_loss}, adversary loss: {adv_loss}', log_file=log_file, verbose=verbose)
+        
+        generator.eval()
+        feature_extractor.eval()
+        adversary.eval()
+        
+        gen_losses = []
+        adv_losses = []
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(val_loader, 0):
+                inputs = batch['image'].to(device=device)
+                labels = batch['landmarks'].view(-1, num_classes).to(device=device)
+                target_attr = batch['attributes'].view(-1, num_attributes).to(device=device)
+
+                # generator: create feature representations and predicts landmark locations using feature representations
+                output = generator(inputs)
+
+                with torch.no_grad():
+                    feat_repr = list(feature_extractor(inputs).items())[0][1] #TODO
+
+                # adversary: predict sensitive attributes using feature representations
+                output_attr = adversary(feat_repr)
+
+                # calculator generator loss and update
+                g_loss = generator_loss(output, labels, output_attr, w, eps, alpha)
+
+                # calculator adversarial loss and update
+                a_loss = adversarial_loss(output_attr, target_attr)
+
+                gen_losses.append(loss.item())
+                adv_losses.append(loss.item())
+        gen_loss = sum(gen_losses) / len(gen_losses)
+        adv_loss = sum(adv_losses) / len(adv_losses)
+        gen_loss_val_hist.append(gen_loss)
+        writer.add_scalar('loss/val', gen_loss, epoch) if writer is not None else 0
+        adv_loss_val_hist.append(adv_loss)
+        writer.add_scalar('loss/adv_val', adv_loss, epoch) if writer is not None else 0
+        _print_log(f'V Epoch {epoch} loss: {gen_loss}, adversary loss: {adv_loss}', log_file=log_file, verbose=verbose)
+        
+        if save_dir is not None:
+            save_folder = os.path.join(save_dir, "checkpoint_" + str(epoch))
+            os.makedirs(save_folder) if not os.path.exists(save_folder) else 0
+            torch.save(generator, os.path.join(save_folder,"model.pt"))
+            torch.save(adversary, os.path.join(save_folder,"adversary.pt"))
+            _print_log(f"S Saved checkpoint at {save_folder}", log_file=log_file, verbose=verbose)
+            
+        if figure_dir is not None and epoch % epoch_per_save == 0:
+            train_figure_file = os.path.join(figure_dir, "loss_train.png")
+            loss_graph(train_figure_file, train=gen_loss_train_hist, val=gen_loss_val_hist, show=False)
+            adv_figure_file = os.path.join(figure_dir, "loss_train_adv.png")
+            loss_graph(adv_figure_file, train=adv_loss_train_hist, val=adv_loss_val_hist, show=False)
+            _print_log(f"S Saved train loss figure at {train_figure_file}", log_file=log_file, verbose=verbose)
+        
 
     return
 
