@@ -7,36 +7,36 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils, models
 from torch import nn
-from loss import wing_loss
+from loss import wing_loss, generator_loss, adversarial_loss
 
 import sys
 sys.path.append('../data')
 sys.path.append('..')
 sys.path.append('../utils')
 
-from datasets import WFLWDataset
+from datasets import WFLWDataset, CelebaDataset
 import landmark_transforms
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from trainer import Trainer
+from adversarial_model import run_model, FeatureExtractor, adversary_classifier, get_optimizer
 
-wflw_data_loc = '/home/data/wflw/'
+data_loc = '/home/data/celeba/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'wflw_resnet_wingloss_animal_nofreeze_1'
+EXPERIMENT_NAME = 'celeba_resnet_adversary_1'
 
-train_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt', wflw_data_loc + 'WFLW_images',
+train_dataset = CelebaDataset(data_loc + 'landmarks_train.csv', data_loc + 'attr_train.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
-                            transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
+                            #transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                         ]), 
                         landmark_transform=transforms.Compose([
                             landmark_transforms.Rescale(224),
                             landmark_transforms.RandomRotation(20),
                             landmark_transforms.NormalizeLandmarks()
-                        ]), crop=True)
-
-val_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt', wflw_data_loc + 'WFLW_images',
+                        ]))
+val_dataset = CelebaDataset(data_loc + 'landmarks_val.csv', data_loc + 'attr_val.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -44,9 +44,8 @@ val_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_
                         landmark_transform=transforms.Compose([
                             landmark_transforms.Rescale(224),
                             landmark_transforms.NormalizeLandmarks()
-                        ]), crop=True)
-
-test_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt', wflw_data_loc + 'WFLW_images',
+                        ]))
+test_dataset = CelebaDataset(data_loc + 'landmarks_test.csv', data_loc + 'attr_test.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -54,66 +53,48 @@ test_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr
                         landmark_transform=transforms.Compose([
                             landmark_transforms.Rescale(224),
                             landmark_transforms.NormalizeLandmarks()
-                        ]), crop=True)
+                        ]))
 
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
 
 
-num_classes = 98*2
+num_classes = 10
+num_attributes = 40
 
 # Define pretrained resnet model
-#resnet18 = models.resnet18(pretrained=False)
-
-path = '/home/erikrozi/facial_landmark_debiasing/src/experiments/checkpoints/animal_baseline_resnet_wingloss_1/checkpoint_11/model.pt'
-resnet18 = torch.load(path)
+resnet18 = models.resnet18(pretrained=False)
 num_features = resnet18.fc.in_features
 resnet18.fc = nn.Linear(num_features, num_classes)
 resnet18 = resnet18.to(device)
 
+resnet_features = FeatureExtractor(resnet18, layers=["avgpool"])
+adversary = adversary_classifier(layer_size=512, num_attr=num_attributes)
+
+g_solver = get_optimizer(resnet18, lr=1e-4)
+a_solver = get_optimizer(adversary, lr=1e-4)
+
 trainer_params = {
-    'model': resnet18,
-    'num_classes': num_classes,
+    'generator': resnet18,
+    'adversary': adversary,
+    'feature_extractor': resnet_features,
+    'g_solver': g_solver,
+    'a_solver': a_solver,
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
-    'test_loader': test_dataloader,
-    'criterion': wing_loss,
-    'criterion_args': {},
-    'optimizer': torch.optim.Adam,
-    'optimizer_args': {
-         "lr": 1e-4,
-         "weight_decay": 0
-    },
-    'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau,
-    'scheduler_args': {
-        "factor": 0.3,
-        "patience": 1,
-        "cooldown": 1,
-        "verbose": True
-    },
-    'scheduler_step_val': True,
-    'debug': False,
-    'is_preset_criterion': False,
-}
-
-trainer = Trainer(**trainer_params)
-
-train_params = {
+    #'test_loader': test_dataloader,
+    'w': 10,
+    'eps': 2,
+    'alpha': 1,
+    'print_every': 100,
     'num_epochs': 25,
-    'start_epochs': 0,
-    'forward_args': {},
-    'validate': True,
-    'test': True,
+    'num_classes': num_classes,
+    'num_attributes': num_attributes,
     'save_dir': "../experiments/checkpoints",
     'tensorboard_dir': "../experiments/tensorboard",
     'log_dir': "../experiments/logs",
     'exp_name': EXPERIMENT_NAME,
-    'epoch_per_save': 1,
-    'epoch_per_print': 1,
-    'batch_per_print': 100,
-    'batch_per_save': 1000000,    # High number for no saving due to storage constraints
-    'verbose': True
 }
 
-trainer.train(**train_params)
+run_model(**trainer_params)

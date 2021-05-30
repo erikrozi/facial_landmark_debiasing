@@ -53,17 +53,19 @@ def wing_loss(output, target, w=10, eps=2):
     return loss
 
 
-def generator_loss(output, target, output_attr, w=10, eps=2, alpha=1):
+def generator_loss(output, target, output_attr, target_attr, w=10, eps=2, alpha=1):
     """
     Calculates the generator loss
     """
     primary_loss = wing_loss(output, target, w, eps)
-    confusion_loss = domain_confusion_loss(output_attr)
+    #confusion_loss = domain_confusion_loss(output_attr)
 
-    loss = primary_loss + alpha * confusion_loss
-    return loss
+    #loss = primary_loss + alpha * confusion_loss
+    confusion_loss = primary_loss - (alpha * adversarial_loss(output_attr, target_attr)) 
+    return confusion_loss
 
 
+'''
 def adversarial_loss(output_attr, target_attr):
     """
     Calculates the adversarial loss of each sensitive attribute and returns the sum
@@ -87,4 +89,10 @@ def domain_confusion_loss(output_attr):
 
     # total loss
     loss = - log_probs.mean()
+    return loss
+'''
+
+def adversarial_loss(output_attr, target_attr):
+    bce = nn.BCEWithLogitsLoss()
+    loss = bce(output_attr, target_attr)
     return loss

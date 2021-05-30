@@ -23,7 +23,7 @@ from adversarial_model import run_model, FeatureExtractor, adversary_classifier,
 
 wflw_data_loc = '/home/data/wflw/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'wflw_resnet_adversary_1'
+EXPERIMENT_NAME = 'wflw_resnet_adversary_2'
 
 train_dataset = WFLWDataset(wflw_data_loc + 'WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_train.txt', wflw_data_loc + 'WFLW_images',
                         transform=transforms.Compose([

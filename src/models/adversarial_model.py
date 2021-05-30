@@ -114,7 +114,7 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
         plt.close()
         fig = plt.figure()
         
-        plt.title(f"Loss, {len(self.train_loss_hist)} epochs")
+        plt.title(f"Loss, {len(train)} epochs")
         
         plt.plot(train, 'b-') if train else 0
         plt.plot(val, 'g-') if val else 0
@@ -177,7 +177,7 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
         for batch_idx, batch in enumerate(train_loader, 0):
             inputs = batch['image'].to(device=device)
             labels = batch['landmarks'].view(-1, num_classes).to(device=device)
-            target_attr = batch['attributes'].view(-1, num_attributes).to(device=device)
+            target_attr = batch['attributes'].view(-1, num_attributes).float().to(device=device)
 
             # zero gradient
             g_solver.zero_grad()
@@ -194,7 +194,7 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             output_attr = adversary(feat_repr)
             
             # calculator generator loss and update
-            g_loss = generator_loss(output, labels, output_attr, w, eps, alpha)
+            g_loss = generator_loss(output, labels, output_attr, target_attr, w, eps, alpha)
             g_loss.backward(retain_graph=True)
             g_solver.step()
 
@@ -203,8 +203,8 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             a_loss.backward()
             a_solver.step()
             
-            gen_losses.append(loss.item())
-            adv_losses.append(loss.item())
+            gen_losses.append(g_loss.item())
+            adv_losses.append(a_loss.item())
 
             if verbose and iter_count % print_every == 0:
                 _print_log('B Iter: {}, G Loss: {:.4}, A Loss:{:.4}'.format(iter_count, g_loss.item(), a_loss.item()), log_file=log_file, verbose=verbose)
@@ -229,7 +229,7 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             for batch_idx, batch in enumerate(val_loader, 0):
                 inputs = batch['image'].to(device=device)
                 labels = batch['landmarks'].view(-1, num_classes).to(device=device)
-                target_attr = batch['attributes'].view(-1, num_attributes).to(device=device)
+                target_attr = batch['attributes'].view(-1, num_attributes).float().to(device=device)
 
                 # generator: create feature representations and predicts landmark locations using feature representations
                 output = generator(inputs)
@@ -241,13 +241,13 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
                 output_attr = adversary(feat_repr)
 
                 # calculator generator loss and update
-                g_loss = generator_loss(output, labels, output_attr, w, eps, alpha)
+                g_loss = generator_loss(output, labels, output_attr, target_attr, w, eps, alpha)
 
                 # calculator adversarial loss and update
                 a_loss = adversarial_loss(output_attr, target_attr)
 
-                gen_losses.append(loss.item())
-                adv_losses.append(loss.item())
+                gen_losses.append(g_loss.item())
+                adv_losses.append(a_loss.item())
         gen_loss = sum(gen_losses) / len(gen_losses)
         adv_loss = sum(adv_losses) / len(adv_losses)
         gen_loss_val_hist.append(gen_loss)
@@ -259,11 +259,11 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
         if save_dir is not None:
             save_folder = os.path.join(save_dir, "checkpoint_" + str(epoch))
             os.makedirs(save_folder) if not os.path.exists(save_folder) else 0
-            torch.save(generator, os.path.join(save_folder,"model.pt"))
-            torch.save(adversary, os.path.join(save_folder,"adversary.pt"))
+            torch.save(generator.state_dict(), os.path.join(save_folder,"model.pt"))
+            torch.save(adversary.state_dict(), os.path.join(save_folder,"adversary.pt"))
             _print_log(f"S Saved checkpoint at {save_folder}", log_file=log_file, verbose=verbose)
             
-        if figure_dir is not None and epoch % epoch_per_save == 0:
+        if figure_dir is not None:
             train_figure_file = os.path.join(figure_dir, "loss_train.png")
             loss_graph(train_figure_file, train=gen_loss_train_hist, val=gen_loss_val_hist, show=False)
             adv_figure_file = os.path.join(figure_dir, "loss_train_adv.png")
