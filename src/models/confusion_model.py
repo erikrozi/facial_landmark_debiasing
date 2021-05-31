@@ -58,8 +58,8 @@ def adversary_classifier(layer_size, num_attr):
       nn.Flatten(),
       nn.Linear(layer_size, 256),
       nn.LeakyReLU(0.01),
-      #nn.Linear(256, 256),
-      #nn.LeakyReLU(0.01),
+      nn.Linear(256, 256),
+      nn.LeakyReLU(0.01),
       nn.Linear(256, num_attr)
     )
 
@@ -197,16 +197,12 @@ def run_model(generator, adversary, feature_extractor, g_solver, a_solver,
             g_loss.backward(retain_graph=True)
             g_solver.step()
             
-            for i in range(num_adversary_repetitions - 1):
+            for _ in range(num_adversary_repetitions - 1):
                 # adversary: predict sensitive attributes using feature representations
                 # calculator adversarial loss and update
                 a_loss = adversarial_loss(output_attr, target_attr)
-                if i == 0:
-                    if verbose and iter_count % print_every == 0:
-                        _print_log('B Pre Iter: {}, G Loss: {:.4}, A Loss:{:.4}'.format(iter_count, g_loss.item(), a_loss.item()), log_file=log_file, verbose=verbose)
                 a_loss.backward(retain_graph=True)
                 a_solver.step()
-                a_solver.zero_grad()
                 output_attr = adversary(feat_repr)
             a_loss = adversarial_loss(output_attr, target_attr)
             a_loss.backward()

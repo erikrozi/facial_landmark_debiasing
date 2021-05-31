@@ -84,6 +84,7 @@ trainer_params = {
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
     #'test_loader': test_dataloader,
+    'num_adversary_repetitions': 10,
     'w': 10,
     'eps': 2,
     'alpha': 1,
