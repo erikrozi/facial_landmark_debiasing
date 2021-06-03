@@ -58,8 +58,8 @@ def adversary_classifier(layer_size, num_attr):
       nn.Flatten(),
       nn.Linear(layer_size, 256),
       nn.LeakyReLU(0.01),
-      #nn.Linear(256, 256),
-      #nn.LeakyReLU(0.01),
+      nn.Linear(256, 256),
+      nn.LeakyReLU(0.01),
       nn.Linear(256, num_attr)
     )
 

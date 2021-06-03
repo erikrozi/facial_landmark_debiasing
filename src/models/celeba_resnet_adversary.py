@@ -23,12 +23,12 @@ from adversarial_model import run_model, FeatureExtractor, adversary_classifier,
 
 data_loc = '/home/data/celeba/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-EXPERIMENT_NAME = 'celeba_resnet_adversary_1'
+EXPERIMENT_NAME = 'celeba_resnet_adversary_2'
 
 train_dataset = CelebaDataset(data_loc + 'landmarks_train.csv', data_loc + 'attr_train.csv', data_loc + 'images/img_celeba',
                         transform=transforms.Compose([
                             transforms.ToTensor(), 
-                            #transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
+                            transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
                             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                         ]), 
                         landmark_transform=transforms.Compose([
@@ -73,7 +73,7 @@ resnet_features = FeatureExtractor(resnet18, layers=["avgpool"])
 adversary = adversary_classifier(layer_size=512, num_attr=num_attributes)
 
 g_solver = get_optimizer(resnet18, lr=1e-4)
-a_solver = get_optimizer(adversary, lr=1e-4)
+a_solver = get_optimizer(adversary, lr=1e-3)
 
 trainer_params = {
     'generator': resnet18,
@@ -83,11 +83,10 @@ trainer_params = {
     'a_solver': a_solver,
     'train_loader': train_dataloader,
     'val_loader': val_dataloader,
-    #'test_loader': test_dataloader,
-    'num_adversary_repetitions': 10,
+    'num_adversary_repetitions': 5,
     'w': 10,
     'eps': 2,
-    'alpha': 1,
+    'alpha': 6,
     'print_every': 100,
     'num_epochs': 25,
     'num_classes': num_classes,
